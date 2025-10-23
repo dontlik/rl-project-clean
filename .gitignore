@@ -1,0 +1,23 @@
+# Python cache files
+__pycache__/
+*.pyc
+
+# Model checkpoints
+*.pt
+
+# Numpy / demo data
+*.npz
+
+# CSV logs
+*.csv
+
+# Experiment logs
+runs/
+wandb/
+
+# Virtual environment
+.venv/
+
+# IDE settings (optional)
+.vscode/
+.idea/
