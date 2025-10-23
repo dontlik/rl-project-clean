@@ -25,7 +25,9 @@ class Policy(nn.Module):
         super().__init__()
         self.net=nn.Sequential(
             nn.Linear(in_dim,256), nn.ReLU(),
+            # nn.Dropout(p=0.2),
             nn.Linear(256,128), nn.ReLU(),
+            # nn.Dropout(p=0.2),
             nn.Linear(128,n_actions)
         )
     def forward(self,x): return self.net(x)
@@ -78,10 +80,13 @@ if __name__=="__main__":
         obs_dim = 147
         goal_dim = 0
         n_actions = 7
-        batch = 256
+        # batch = 256
+        batch = 12
         lr = 3e-4
-        wd = 1e-4
-        epochs = 30
+        # wd = 1e-4
+        wd = 1e-9
+        # epochs = 30
+        epochs = 500
         seed = 0
         ckpt = "bc/checkpoints/pi_ref.pt"
     # NOTE: set obs_dim to the flattened size: for FullyObsWrapper, DoorKey-6x6 -> image shape [height,width,3].
