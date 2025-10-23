@@ -10,7 +10,7 @@ pip install -r requirements.txt
 ```
 ## 1) Generate expert demos
 ```bash
-python utils/generate_expert_demos.py --env_id MiniGrid-DoorKey-6x6-v0 --seeds 0 1 --episodes_per_seed 15
+python utils/expert_demos_best.py --env_id MiniGrid-DoorKey-6x6-v0 --seeds 0 1 --episodes_per_seed 15
 ```
 
 ## 2) Train Behavior Cloning (π_ref)
