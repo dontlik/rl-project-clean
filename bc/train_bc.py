@@ -73,8 +73,17 @@ def train(cfg):
 if __name__=="__main__":
     import dataclasses
     @dataclasses.dataclass
-    class C: demos_glob="data/demos/MiniGrid-DoorKey-6x6-v0/*.npz"; obs_dim=147*; goal_dim=0; n_actions=7; \
-        batch=256; lr=3e-4; wd=1e-4; epochs=30; seed=0; ckpt="bc/checkpoints/pi_ref.pt"
+    class C:
+        demos_glob = "data/demos/MiniGrid-DoorKey-6x6-v0/*.npz"
+        obs_dim = 147
+        goal_dim = 0
+        n_actions = 7
+        batch = 256
+        lr = 3e-4
+        wd = 1e-4
+        epochs = 30
+        seed = 0
+        ckpt = "bc/checkpoints/pi_ref.pt"
     # NOTE: set obs_dim to the flattened size: for FullyObsWrapper, DoorKey-6x6 -> image shape [height,width,3].
     # At runtime we can infer. Let's infer from a sample file:
     ap=argparse.ArgumentParser()
