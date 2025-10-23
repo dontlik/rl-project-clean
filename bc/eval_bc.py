@@ -1,6 +1,6 @@
 import argparse, numpy as np, torch as th, pandas as pd
-from envs.minigrid_wrapper import make_env, obs_to_vec
-from bc.train_bc import Policy
+from envs.minigrid_wrapper import make_env #obs_to_vec
+from .train_bc import Policy
 
 def load_policy(ckpt):
     d=th.load(ckpt, map_location="cpu")

@@ -16,7 +16,7 @@ python utils/expert_demos_best.py --env_id MiniGrid-DoorKey-6x6-v0 --seeds 0 1 -
 ## 2) Train Behavior Cloning (π_ref)
 ```bash
 python bc/train_bc.py --demos_glob "data/demos/MiniGrid-DoorKey-6x6-v0/*.npz"
-python bc/eval_bc.py --ckpt bc/checkpoints/pi_ref.pt --episodes 60
+python -m bc.eval_bc --ckpt bc/checkpoints/pi_ref.pt --episodes 60
 ```
 
 ## 3) Preference pairs (synthetic)
