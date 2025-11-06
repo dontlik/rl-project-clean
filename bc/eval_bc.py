@@ -5,7 +5,8 @@ from .train_bc import Policy
 def load_policy(ckpt):
     d=th.load(ckpt, map_location="cpu")
     pi=Policy(d["in_dim"], 7)  # DoorKey is 7 actions
-    pi.load_state_dict(d["state_dict"]); pi.eval()
+    pi.load_state_dict(d["state_dict"]); 
+    pi.eval()
     return pi, d["in_dim"]
 
 def run(env_id, seeds, episodes, ckpt):
