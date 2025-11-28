@@ -96,7 +96,7 @@ def main(pairs_path, ref_ckpt, beta=0.5, lr=1e-4, batch_size=8, epochs=5, save_p
             kls.append(approx_kl(pi_theta, pi_ref, batch, device))
         print(f"[ep {ep}] dpo_loss={tot/len(ds):.4f}  MC-KL≈{np.mean(kls):.4f}")
 
-    th.save({"state_dict":pi_theta.state_dict(), "in_dim":in_dim}, save_path)
+    th.save({"state_dict":pi_theta.state_dict(), "in_dim":in_dim, "encoder": encoder_theta.state_dict(), "goal_dim":goal_dim}, save_path)
     print("saved:", save_path)
 
 if __name__=="__main__":
