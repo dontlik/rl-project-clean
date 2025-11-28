@@ -29,7 +29,11 @@ python prefs/make_pairs.py --glob "data/demos/MiniGrid-DoorKey-6x6-v0/*.npz" --o
 python prefs/dpo_train.py --pairs data/prefs/pairs.pt --ref_ckpt bc/checkpoints/pi_ref.pt --beta 0.5 --epochs 5
 python bc/eval_bc.py --ckpt prefs/checkpoints/dpo.pt --episodes 60
 ```
-
+## 5) manual data
+```bash
+python human.py
+python prefs/make_pairs.py --glob "data/demos/manual/*.npz" --out data/prefs/pairs.pt --L 20 --stride 10
+```
 ---
 
 ## Notes & next steps
