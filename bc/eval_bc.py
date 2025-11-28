@@ -1,17 +1,25 @@
 import argparse, numpy as np, torch as th, pandas as pd
-from envs.minigrid_wrapper import make_env #obs_to_vec
-from .train_bc import Policy
-
+from envs.minigrid_wrapper import make_env, obs_to_tensor #obs_to_vec
+from .train_bc import Policy, Cnn_Emb
+import torch
 def load_policy(ckpt):
     d=th.load(ckpt, map_location="cpu")
-    pi=Policy(d["in_dim"], 7)  # DoorKey is 7 actions
+    in_dim = d["in_dim"]
+    goal_dim = d["goal_dim"]
+    cnn_out_dim = in_dim - goal_dim
+    encoder = Cnn_Emb(in_dim=(3, 15, 15), out_dim=cnn_out_dim)
+
+    pi=Policy(n_actions=7, in_dim=d["in_dim"])  # DoorKey is 7 actions
+    encoder.load_state_dict(d["encoder"])
     pi.load_state_dict(d["state_dict"]); 
+    encoder.eval()
     pi.eval()
-    return pi, d["in_dim"]
+    return encoder, pi, d["in_dim"],goal_dim
 
 def run(env_id, seeds, episodes, ckpt):
-    pi,in_dim=load_policy(ckpt)
+    encoder, pi,in_dim, goal_dim=load_policy(ckpt)
     device=th.device("cuda" if th.cuda.is_available() else "cpu")
+    encoder.to(device)
     pi.to(device)
     stats=[]
     for sd in seeds:
@@ -20,9 +28,15 @@ def run(env_id, seeds, episodes, ckpt):
             obs, info = env.reset(seed=sd)
             ret=0; done=False; steps=0
             while not done:
-                x=obs["image"].astype(np.float32).flatten()/10.0
-                xt=th.tensor(x, dtype=th.float32, device=device).unsqueeze(0)
+                obs_tensor, goal_tensor = obs_to_tensor(obs, goal_dim=goal_dim)
+                obs_tensor = obs_tensor.unsqueeze(0).to(device) 
                 with th.no_grad():
+                    img_feat = encoder(obs_tensor)
+                    if goal_tensor is not None:
+                        goal_tensor = goal_tensor.unsqueeze(0) 
+                        xt = torch.cat([img_feat, goal_tensor], dim=-1)
+                    else:
+                        xt = img_feat
                     a=pi(xt).argmax(-1).item()
                 obs, r, term, trunc, info = env.step(a)
                 ret+=float(r); steps+=1; done=bool(term or trunc)

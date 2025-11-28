@@ -21,3 +21,6 @@ wandb/
 # IDE settings (optional)
 .vscode/
 .idea/
+
+
+.vs/

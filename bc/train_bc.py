@@ -6,22 +6,47 @@ th.set_float32_matmul_precision("high")
 
 class DemoSet(Dataset):
     def __init__(self, paths, obs_dim, goal_dim=0, take_every=1):
-        X,Y=[],[]
+        X,Y,G=[],[],[]
         for p in paths:
             z=np.load(p, allow_pickle=True)
             obs=z["obs"]; act=z["action"]
             goal=z["goal"] if "goal" in z.files and goal_dim>0 else None
             T=len(act)
             for t in range(0,T,take_every):
-                x=obs[t] if goal is None else np.concatenate([obs[t], goal[t]],-1)
+                if goal is None:
+                    G.append(np.zeros(goal_dim, dtype=np.float32))
+                else:
+                    G.append(goal[t])
+                x=obs[t] 
+                print(x.shape)
                 X.append(x); Y.append(int(act[t]))
         self.X=th.tensor(np.array(X), dtype=th.float32)
+        self.G=th.tensor(np.array(G), dtype=th.float32)
         self.Y=th.tensor(np.array(Y), dtype=th.long)
     def __len__(self): return len(self.Y)
-    def __getitem__(self,i): return self.X[i], self.Y[i]
+    def __getitem__(self,i): return self.X[i], self.G[i], self.Y[i]
+
+class Cnn_Emb(nn.Module):
+    def __init__(self, in_dim = (3,15,15), out_dim = 128):
+        super().__init__()
+        _, H, W = in_dim
+        self.conv = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        conv_out_dim = 32 * H * W
+        self.linear = nn.Linear(conv_out_dim, out_dim)
+    def forward(self,x): 
+        x = self.conv(x)      
+        x = self.linear(x)    
+        return x
+
 
 class Policy(nn.Module):
-    def __init__(self, in_dim, n_actions):
+    def __init__(self, n_actions, in_dim=128):
         super().__init__()
         self.net=nn.Sequential(
             nn.Linear(in_dim,256), nn.ReLU(),
@@ -37,7 +62,8 @@ class Policy(nn.Module):
 
 def train(cfg):
     th.manual_seed(cfg.seed)
-    in_dim=cfg.obs_dim+cfg.goal_dim
+    #in_dim=cfg.obs_dim+cfg.goal_dim
+    in_dim = 128 + cfg.goal_dim
     paths=sorted(glob.glob(cfg.demos_glob))
     assert paths, "no demos found"
     n=int(len(paths)*0.8)
@@ -45,8 +71,11 @@ def train(cfg):
     trds, vads = DemoSet(tr,cfg.obs_dim,cfg.goal_dim), DemoSet(va,cfg.obs_dim,cfg.goal_dim)
     trld=DataLoader(trds,batch_size=cfg.batch,batch_sampler=None,shuffle=True)
     vald=DataLoader(vads,batch_size=cfg.batch,shuffle=False)
+    
     device=th.device("cuda" if th.cuda.is_available() else "cpu")
-    pi=Policy(in_dim,cfg.n_actions).to(device)
+    encoder = Cnn_Emb(in_dim=(3,15,15), out_dim=128).to(device)
+
+    pi=Policy(cfg.n_actions,in_dim=128 + cfg.goal_dim).to(device)
     opt=th.optim.Adam(pi.parameters(), lr=cfg.lr, weight_decay=cfg.wd)
     ce=nn.CrossEntropyLoss()
     best=float("inf")
@@ -54,22 +83,26 @@ def train(cfg):
 
     for ep in range(cfg.epochs):
         pi.train(); tl=0
-        for x,y in tqdm(trld, desc=f"epoch {ep}"):
-            x,y=x.to(device),y.to(device)
-            logits=pi(x); loss=ce(logits,y)
+        for obs, goal, action in tqdm(trld, desc=f"epoch {ep}"):
+            obs, goal, action=obs.to(device), goal.to(device), action.to(device)
+            x = encoder(obs)
+            x = th.cat([x, goal], dim=-1)  
+            logits=pi(x); loss=ce(logits,action)
             opt.zero_grad(); loss.backward(); opt.step()
             tl+=loss.item()*len(x)
         tl/=len(trds)
 
         pi.eval(); vl=0; acc=0; n=0
         with th.no_grad():
-            for x,y in vald:
-                x,y=x.to(device),y.to(device)
+            for x, g, y in vald: 
+                x, g, y = x.to(device), g.to(device), y.to(device)
+                x = encoder(x)
+                x = th.cat([x, g], dim=-1) 
                 logits=pi(x); loss=ce(logits,y); vl+=loss.item()*len(x)
                 pred=logits.argmax(-1); acc+=(pred==y).sum().item(); n+=len(x)
         vl/=len(vads); acc/=max(1,n)
         print(f"[ep {ep}] train_ce={tl:.4f} val_ce={vl:.4f} val_acc={acc:.3f}")
-        if vl<best: best=vl; th.save({"state_dict":pi.state_dict(),"in_dim":in_dim}, cfg.ckpt)
+        if vl<best: best=vl; th.save({"state_dict":pi.state_dict(),"encoder": encoder.state_dict(),"in_dim":in_dim,"goal_dim": cfg.goal_dim,}, cfg.ckpt)
     print("saved:", cfg.ckpt)
 
 if __name__=="__main__":
@@ -106,7 +139,7 @@ if __name__=="__main__":
     # infer obs_dim from a file
     import glob as G
     f=sorted(G.glob(args.demos_glob))[0]; z=np.load(f,allow_pickle=True)
-    obs_dim=z["obs"].shape[-1]; print("inferred obs_dim:",obs_dim)
+    obs_dim=z["obs"].shape[1:]; print("inferred obs_dim:",obs_dim)
     args.obs_dim=obs_dim
     train(args)
 

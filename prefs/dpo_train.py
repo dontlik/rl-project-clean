@@ -1,6 +1,8 @@
+import os, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import argparse, torch as th, torch.nn as nn, torch.optim as optim, numpy as np
 from torch.utils.data import Dataset, DataLoader
-from bc.train_bc import Policy
+from bc.train_bc import Policy, Cnn_Emb
 from tqdm import tqdm
 
 class PairSet(Dataset):
@@ -55,21 +57,33 @@ def approx_kl(pi_theta, pi_ref, batch, device):
     return kl
 
 def main(pairs_path, ref_ckpt, beta=0.5, lr=1e-4, batch_size=8, epochs=5, save_path="prefs/checkpoints/dpo.pt"):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     device=th.device("cuda" if th.cuda.is_available() else "cpu")
-    pairs=th.load(pairs_path)
+    pairs=th.load(pairs_path,weights_only=False)
     ds=PairSet(pairs)
     dl=DataLoader(ds, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    # infer dims
-    in_dim = ds[0][0].shape[-1]
-    n_actions = int(ds[0][1].max().item()+1)  # rough infer; DoorKey=7 anyway
+    d = th.load(ref_ckpt, map_location="cpu")
 
-    pi_ref = Policy(in_dim, n_actions); pi_ref.load_state_dict(th.load(ref_ckpt, map_location="cpu")["state_dict"])
+    in_dim = d["in_dim"]
+    n_actions = 7  # rough infer; DoorKey=7 anyway
+
+    print("Input dimension (in_dim):", in_dim)
+    print("Number of actions (n_actions):", n_actions)
+
+    goal_dim = d["goal_dim"]
+    cnn_out_dim = in_dim - goal_dim
+
+    pi_ref = Policy(n_actions, in_dim); pi_ref.load_state_dict(th.load(ref_ckpt, map_location="cpu")["state_dict"])
+    encoder_ref = Cnn_Emb(in_dim=(3, 15, 15), out_dim=cnn_out_dim); encoder_ref.load_state_dict(d["encoder"])
     for p in pi_ref.parameters(): p.requires_grad=False
     pi_ref.eval(); pi_ref.to(device)
+    encoder_ref.eval(); encoder_ref.to(device)
 
-    pi_theta = Policy(in_dim, n_actions); pi_theta.load_state_dict(th.load(ref_ckpt, map_location="cpu")["state_dict"])
+    encoder_theta = Cnn_Emb(in_dim=(3, 15, 15), out_dim=cnn_out_dim); encoder_theta.load_state_dict(d["encoder"])
+    pi_theta = Policy(n_actions, in_dim); pi_theta.load_state_dict(th.load(ref_ckpt, map_location="cpu")["state_dict"])
     pi_theta.to(device)
+    encoder_theta.to(device)
     opt=optim.Adam(pi_theta.parameters(), lr=lr)
 
     for ep in range(epochs):

@@ -2,6 +2,9 @@ import argparse, os, numpy as np, gymnasium as gym
 from minigrid.wrappers import FullyObsWrapper
 from collections import deque
 from typing import List, Tuple, Optional
+import minigrid
+import torch
+import torch.nn.functional as F
 
 A_LEFT, A_RIGHT, A_FWD, A_PICK, A_DROP, A_TOGGLE, A_DONE = 0, 1, 2, 3, 4, 5, 6
 
@@ -172,6 +175,13 @@ def plan_episode_actions(env) -> List[int]:
     actions += a3
     return actions
 
+def resize(obs_img, target_shape=(3, 15, 15)):
+
+    img = torch.tensor(obs_img, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0) / 10.0
+    resized = F.interpolate(img, size=target_shape[1:], mode='bilinear', align_corners=False)
+    return resized.squeeze(0) 
+
+
 def run_and_save(env_id: str, seeds: List[int], episodes_per_seed: int,
                  out_dir: str, render: bool=False, goal_onehot: int=0):
     os.makedirs(f"{out_dir}/{env_id}", exist_ok=True)
@@ -182,6 +192,9 @@ def run_and_save(env_id: str, seeds: List[int], episodes_per_seed: int,
         env = FullyObsWrapper(env_raw)
         for ep in range(episodes_per_seed):
             obs, info = env.reset(seed=seed*1000+ep)
+
+            grid = env.unwrapped.grid
+
             total_r = 0.0
             steps = 0
             success = False
@@ -198,8 +211,16 @@ def run_and_save(env_id: str, seeds: List[int], episodes_per_seed: int,
                     for a in planned:
                         if render: env.render()
                         # record obs BEFORE action
-                        obs_flat = obs["image"].astype(np.float32).flatten() / 10.0
-                        rec["obs"].append(obs_flat)
+                        #obs_flat = obs["image"].astype(np.float32).flatten() / 10.0
+                        #rec["obs"].append(obs_flat)
+                        
+                        
+                        obs_resized = resize(obs["image"])
+                        rec["obs"].append(obs_resized)
+
+                        resized = resize(obs["image"])
+                        print(resized.shape)
+
                         if goal_vec is not None: rec["goal"].append(goal_vec.copy())
                         rec["action"].append(int(a))
 
@@ -262,7 +283,10 @@ if __name__ == "__main__":
     ap.add_argument("--render", type=int, default=0)
     ap.add_argument("--goal_onehot", type=int, default=0)
     args = ap.parse_args()
+    
 
+    
+    
     run_and_save(
         env_id=args.env_id,
         seeds=args.seeds,
